@@ -1,32 +1,86 @@
-import pandas as pd 
-from sklearn.model_selection import train_test_split
-from sklearn import svm
+#Imported Libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
 
-pd.options.mode.chained_assignment = None
-all_images = pd.read_csv("../input/train.csv")
-
-print("Train set loaded...")
-images = all_images.iloc[:, 1:]
-labels = all_images.iloc[:, :1]
-images[images > 0] = 1
+get_ipython().magic('matplotlib inline')
 
 
-print("Images converted to binary")
-train_images, test_images, train_labels, test_labels = train_test_split(images, labels, train_size=0.8, random_state=0)
-clf = svm.SVC()
-clf.fit(train_images, train_labels.values.ravel())
+#Loading Data
+train = pd.read_csv('train.csv')
+label = pd.DataFrame(train.label)
+train = train[train.columns.drop('label')]
+test = pd.read_csv('test.csv')
+
+trainImages, trainLabels = train, label
+testImages, testLabels = test, label
 
 
-print("Fitting model succeeded...")
-print(clf.score(test_images, test_labels))
-test_images = pd.read_csv("../input/test.csv")
-test_images[test_images > 0] = 1
+#Put the pixels into an image
+i = 0
+num = Image.new("RGB",(28, 28))
+px = num.load()
+for y in range(28):
+    for x in range(28):
+        px[x,y] = (train.iloc[500,i],0,0)
+        i = i + 1
+        
+num
 
 
-print("Test set loaded...")
-test_labels = clf.predict(test_images)
-image_id = range(1, len(test_labels) + 1)
-output = pd.DataFrame({'ImageId': image_id, 'Label': test_labels})
+#Random Forest Classifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import cross_validation, metrics
+
+y = label
+X = train
+
+error_rate = []
+
+cv = cross_validation.KFold(len(X), n_folds=5, shuffle=True)
+
+for train_index, test_index in cv:
+    model = RandomForestClassifier(n_estimators=75, max_depth=15, min_samples_leaf=6).fit(X.iloc[train_index], y.iloc[train_index])
+    df = y.iloc[test_index]
+    df['predict'] = model.predict(X.iloc[test_index])
+    error_rate.append(float(len(df[df.label != df.predict]))/float(len(df)))
+    
+    
+print("Error Rate:", np.mean(error_rate))
 
 
-output.to_csv("output.csv", index=False)
+
+test['label'] = pd.DataFrame(model.predict(test.fillna(0)))
+pd.DataFrame(test.label)
+
+
+
+#Map pixels into an image
+from PIL import Image
+
+i = 0
+num = Image.new("RGB",(28, 28))
+px = num.load()
+for y in range(28):
+    for x in range(28):
+        px[x,y] = (test.iloc[9,i],0,0)
+        i = i + 1        
+num
+
+
+
+
+# Plot pixel importances
+importances = model.feature_importances_
+importances = importances.reshape((28, 28))
+plt.matshow(importances, cmap=plt.cm.hot)
+plt.title("Pixel importances for random forests")
+plt.show()
+
+
+
+#Cross Validation Score
+scores = cross_validation.cross_val_score(model, train[:1000], train[:1000].values.tolist(), cv=5)
+print (scores)
+
